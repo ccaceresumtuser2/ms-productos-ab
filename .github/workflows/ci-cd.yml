@@ -6,6 +6,14 @@ name: CI/CD
 #                        ▼              ▼
 #               Render (dev)    Render (producción)
 #   hotfix/*   ──PR──►  main (y luego se integra en dev)
+#
+#   CI (build + tests): todas las ramas.
+#   CD:
+#     main      -> ms-productos-ab      (producción, auto-deploy de Render)
+#     dev       -> ms-productos-ab-dev  (desarrollo, auto-deploy de Render)
+#     feature/* -> ms-productos-ab-dev  (job deploy-dev, vía API de Render)
+#     hotfix/*  -> ms-productos-ab-dev  (job deploy-dev, vía API de Render)
+#   Producción solo recibe código de main.
 on:
   push:
     branches: [main, dev, 'feature/**', 'hotfix/**']
@@ -25,7 +33,7 @@ jobs:
   branch-policy:
     name: Política de ramas
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Validar origen del PR
         env:
@@ -48,12 +56,12 @@ jobs:
   # Corre en todas las ramas: main, dev, feature/*, hotfix/*
   build-test:
     name: Build y tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Configurar Java 21
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
@@ -66,30 +74,84 @@ jobs:
 
       - name: Publicar reportes de tests
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: surefire-reports-${{ github.run_id }}
           path: target/surefire-reports/
           retention-days: 7
 
   # ------------- Verifica que la imagen Docker de Render compila -------------
-  # Solo en ramas que van camino a producción (no en cada push de feature)
+  # Solo en main, dev y en el PR dev -> main.
+  # En feature/* y hotfix/* no hace falta: Render construye la imagen al desplegar en dev,
+  # y si el build falla, dev sigue con la versión anterior.
   docker-build:
     name: Build imagen Docker
     needs: build-test
     if: >-
-      github.ref_name == 'main' ||
-      github.ref_name == 'dev' ||
-      startsWith(github.ref_name, 'hotfix/') ||
-      (github.event_name == 'pull_request' && github.base_ref == 'main')
-    runs-on: ubuntu-latest
+      (github.event_name != 'pull_request' &&
+        (github.ref_name == 'main' || github.ref_name == 'dev')) ||
+      (github.event_name == 'pull_request' && github.base_ref == 'main' &&
+        !startsWith(github.head_ref, 'hotfix/') && !startsWith(github.head_ref, 'feature/'))
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: docker build
         run: docker build -t ms-productos-ab:${{ github.sha }} .
 
   # ---------------- CD ----------------
-  # Render despliega automáticamente (render.yaml -> autoDeployTrigger: checksPass)
-  # cuando todos los checks de este workflow pasan en la rama del servicio:
-  #   main -> ms-productos-ab      (producción)
-  #   dev  -> ms-productos-ab-dev  (desarrollo)
+  # main y dev: Render despliega solo (render.yaml -> autoDeployTrigger: checksPass)
+  # cuando todos los checks de este workflow pasan en esa rama.
+  #
+  # feature/* y hotfix/*: este job despliega el commit en el ambiente DEV
+  # (ms-productos-ab-dev) usando la API de Render, solo si los tests pasaron.
+  # Se usa la API (commitId) y no el deploy hook (?ref=), porque el deploy hook
+  # con un commit específico desactiva el auto-deploy del servicio.
+  #
+  # Requiere en GitHub (Settings > Secrets and variables > Actions):
+  #   Secret   RENDER_API_KEY         -> Render > Account Settings > API Keys
+  #   Variable RENDER_DEV_SERVICE_ID  -> id del servicio dev (srv-...), está en su URL
+  #
+  # Nota: dev queda con el código de la feature/hotfix hasta el próximo push a dev,
+  # que vuelve a desplegar automáticamente la rama dev.
+  deploy-dev:
+    name: Deploy a dev (Render)
+    needs: build-test
+    if: >-
+      github.event_name == 'push' &&
+      (startsWith(github.ref_name, 'feature/') || startsWith(github.ref_name, 'hotfix/'))
+    runs-on: ubuntu-24.04
+    environment:
+      name: dev
+      url: https://ms-productos-ab-dev.onrender.com/swagger-ui.html
+    concurrency:
+      group: deploy-dev          # un deploy a dev a la vez; no cancela el que está en curso
+      cancel-in-progress: false
+    steps:
+      - name: Desplegar ${{ github.ref_name }} (${{ github.sha }}) en ms-productos-ab-dev
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          # Se acepta como Variable (recomendado: no es un dato sensible) o como Secret
+          SERVICE_ID: ${{ vars.RENDER_DEV_SERVICE_ID || secrets.RENDER_DEV_SERVICE_ID }}
+        run: |
+          faltan=0
+          if [ -z "$RENDER_API_KEY" ]; then
+            echo "::error::Falta el SECRET RENDER_API_KEY (Settings > Secrets and variables > Actions > pestaña Secrets)"
+            faltan=1
+          fi
+          case "$SERVICE_ID" in
+            ""|srv-*) ;;
+            *) echo "::error::RENDER_DEV_SERVICE_ID debe ser el id del servicio (empieza con srv-), no el nombre ni la URL"
+               faltan=1 ;;
+          esac
+          if [ -z "$SERVICE_ID" ]; then
+            echo "::error::Falta RENDER_DEV_SERVICE_ID (Settings > Secrets and variables > Actions, como Variable o Secret de repositorio, con el id srv-... del servicio)"
+            faltan=1
+          fi
+          [ "$faltan" = 0 ] || exit 1
+          curl -fsS -X POST "https://api.render.com/v1/services/${SERVICE_ID}/deploys" \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            -H "Accept: application/json" \
+            -H "Content-Type: application/json" \
+            -d "{\"commitId\": \"${GITHUB_SHA}\"}"
+          echo
+          echo "Deploy solicitado. Sigue el progreso en el dashboard de Render (ms-productos-ab-dev > Events)."
