@@ -25,7 +25,7 @@ jobs:
   branch-policy:
     name: Política de ramas
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Validar origen del PR
         env:
@@ -48,12 +48,12 @@ jobs:
   # Corre en todas las ramas: main, dev, feature/*, hotfix/*
   build-test:
     name: Build y tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Configurar Java 21
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
@@ -66,7 +66,7 @@ jobs:
 
       - name: Publicar reportes de tests
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: surefire-reports-${{ github.run_id }}
           path: target/surefire-reports/
@@ -82,9 +82,9 @@ jobs:
       github.ref_name == 'dev' ||
       startsWith(github.ref_name, 'hotfix/') ||
       (github.event_name == 'pull_request' && github.base_ref == 'main')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: docker build
         run: docker build -t ms-productos-ab:${{ github.sha }} .
 
