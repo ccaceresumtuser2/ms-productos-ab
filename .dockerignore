@@ -1,0 +1,9 @@
+target/
+.git/
+.github/
+.idea/
+.vscode/
+*.iml
+datosbd.txt
+src/main/resources/application-local.properties
+.env

@@ -1,0 +1,57 @@
+### Pruebas manuales de servicios (VS Code REST Client / IntelliJ HTTP Client)
+@baseUrl = http://localhost:8080/api/productos
+
+### Listar todos
+GET {{baseUrl}}
+
+### Filtrar por categoría
+GET {{baseUrl}}?categoria=Audio
+
+### Obtener por id
+GET {{baseUrl}}/1
+
+### Obtener inexistente (404)
+GET {{baseUrl}}/9999
+
+### Crear
+POST {{baseUrl}}
+Content-Type: application/json
+
+{
+  "codigo": "PRD-100",
+  "nombre": "Mouse Gamer Logitech G203",
+  "descripcion": "Mouse RGB 8000 DPI",
+  "categoria": "Accesorios",
+  "precio": 24990,
+  "stock": 50,
+  "activo": true
+}
+
+### Crear inválido (400)
+POST {{baseUrl}}
+Content-Type: application/json
+
+{ "codigo": "", "precio": -10 }
+
+### Crear con código duplicado (409)
+POST {{baseUrl}}
+Content-Type: application/json
+
+{ "codigo": "PRD-001", "nombre": "Duplicado", "categoria": "Test", "precio": 1, "stock": 1 }
+
+### Actualizar
+PUT {{baseUrl}}/1
+Content-Type: application/json
+
+{
+  "codigo": "PRD-001",
+  "nombre": "Notebook Lenovo IdeaPad 3 (2026)",
+  "descripcion": "Notebook 15.6\" Ryzen 5, 16GB RAM, 512GB SSD",
+  "categoria": "Computación",
+  "precio": 529990,
+  "stock": 14,
+  "activo": true
+}
+
+### Eliminar
+DELETE {{baseUrl}}/100

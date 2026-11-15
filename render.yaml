@@ -1,0 +1,47 @@
+# Render Blueprint (Infrastructure as Code)
+# Render > New > Blueprint > seleccionar este repositorio.
+#
+# Dos ambientes, cada uno ligado a una rama:
+#   main -> ms-productos-ab      (producción)
+#   dev  -> ms-productos-ab-dev  (desarrollo / QA)
+# Ambos despliegan solos cuando los checks de GitHub Actions pasan en su rama.
+
+services:
+  # ---------------- Producción (rama main) ----------------
+  - type: web
+    name: ms-productos-ab
+    runtime: docker
+    plan: free
+    region: oregon            # misma región que la BD -> se usa la URL interna
+    branch: main
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /actuator/health
+    autoDeployTrigger: checksPass
+    envVars:
+      # Se configuran en el dashboard de Render (no se versionan)
+      # Ej: jdbc:postgresql://<host-interno>:5432/bd_postgresql_productos
+      - key: DB_URL
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+
+  # ---------------- Desarrollo (rama dev) ----------------
+  - type: web
+    name: ms-productos-ab-dev
+    runtime: docker
+    plan: free
+    region: oregon
+    branch: dev
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /actuator/health
+    autoDeployTrigger: checksPass
+    envVars:
+      # Idealmente apuntar a una BD distinta a la de producción
+      - key: DB_URL
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false

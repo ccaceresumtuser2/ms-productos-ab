@@ -1,0 +1,12 @@
+# Credenciales de base de datos
+datosbd.txt
+src/main/resources/application-local.properties
+.env
+
+# Build
+target/
+
+# IDE
+.idea/
+*.iml
+.vscode/
