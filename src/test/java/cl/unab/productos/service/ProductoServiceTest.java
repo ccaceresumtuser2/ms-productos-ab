@@ -6,10 +6,14 @@ import cl.unab.productos.entity.Producto;
 import cl.unab.productos.exception.CodigoDuplicadoException;
 import cl.unab.productos.exception.ProductoNotFoundException;
 import cl.unab.productos.repository.ProductoRepository;
+import cl.unab.productos.dto.AlertaStockResponse;
+import cl.unab.productos.dto.NivelAlerta;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Sort;
@@ -30,8 +34,12 @@ class ProductoServiceTest {
     @Mock
     private ProductoRepository repository;
 
-    @InjectMocks
     private ProductoService service;
+
+    @BeforeEach
+    void setUp() {
+        service = new ProductoService(repository);
+    }
 
     private static Producto producto(Integer id, String codigo) {
         Producto p = new Producto();
@@ -150,6 +158,61 @@ class ProductoServiceTest {
         service.eliminar(1);
 
         verify(repository).delete(p);
+    }
+
+    // ---------------- Alertas de stock bajo ----------------
+
+    private static Producto conStock(Integer id, int stock) {
+        Producto p = producto(id, "PRD-" + id);
+        p.setStock(stock);
+        return p;
+    }
+
+    @Test
+    @DisplayName("la regla de negocio fija el stock mínimo en 10 y el crítico en 5")
+    void reglasDeNegocio() {
+        assertThat(ProductoService.STOCK_MINIMO).isEqualTo(10);
+        assertThat(ProductoService.STOCK_CRITICO).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("alertas consulta stock <= 10, clasifica cada producto y sugiere reposición")
+    void alertasStockBajo() {
+        when(repository.findByActivoTrueAndStockLessThanEqualOrderByStockAscIdAsc(10))
+                .thenReturn(List.of(conStock(1, 0), conStock(2, 4), conStock(3, 9), conStock(4, 10)));
+
+        AlertaStockResponse res = service.alertasStockBajo();
+
+        assertThat(res.stockMinimo()).isEqualTo(10);
+        assertThat(res.totalAlertas()).isEqualTo(4);
+        assertThat(res.productos()).extracting(AlertaStockResponse.ProductoAlerta::nivel)
+                .containsExactly(NivelAlerta.SIN_STOCK, NivelAlerta.CRITICO, NivelAlerta.BAJO, NivelAlerta.BAJO);
+        assertThat(res.productos()).extracting(AlertaStockResponse.ProductoAlerta::unidadesSugeridas)
+                .containsExactly(10, 6, 1, 0);
+        verify(repository).findByActivoTrueAndStockLessThanEqualOrderByStockAscIdAsc(10);
+    }
+
+    @Test
+    void alertasSinResultadosDevuelveListaVacia() {
+        when(repository.findByActivoTrueAndStockLessThanEqualOrderByStockAscIdAsc(10)).thenReturn(List.of());
+
+        AlertaStockResponse res = service.alertasStockBajo();
+
+        assertThat(res.totalAlertas()).isZero();
+        assertThat(res.productos()).isEmpty();
+    }
+
+    @ParameterizedTest(name = "stock {0} -> {1}")
+    @CsvSource({
+            "0, SIN_STOCK",
+            "1, CRITICO",
+            "5, CRITICO",
+            "6, BAJO",
+            "9, BAJO",
+            "10, BAJO"
+    })
+    void clasificacionDelNivel(int stock, NivelAlerta esperado) {
+        assertThat(ProductoService.clasificar(stock)).isEqualTo(esperado);
     }
 
     @Test

@@ -9,6 +9,9 @@ public interface ProductoRepository extends JpaRepository<Producto, Integer> {
 
     List<Producto> findByCategoriaIgnoreCaseOrderByIdAsc(String categoria);
 
+    /** Productos activos con stock menor o igual al indicado, del más urgente al menos urgente. */
+    List<Producto> findByActivoTrueAndStockLessThanEqualOrderByStockAscIdAsc(Integer stock);
+
     boolean existsByCodigo(String codigo);
 
     boolean existsByCodigoAndIdNot(String codigo, Integer id);

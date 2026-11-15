@@ -7,6 +7,9 @@ GET {{baseUrl}}
 ### Filtrar por categoría
 GET {{baseUrl}}?categoria=Audio
 
+### Alerta de stock bajo (productos activos con stock menor o igual a 10)
+GET {{baseUrl}}/alertas/stock-bajo
+
 ### Obtener por id
 GET {{baseUrl}}/1
 

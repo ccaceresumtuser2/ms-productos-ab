@@ -1,5 +1,7 @@
 package cl.unab.productos.controller;
 
+import cl.unab.productos.dto.AlertaStockResponse;
+import cl.unab.productos.dto.NivelAlerta;
 import cl.unab.productos.dto.ProductoRequest;
 import cl.unab.productos.dto.ProductoResponse;
 import cl.unab.productos.exception.CodigoDuplicadoException;
@@ -61,6 +63,29 @@ class ProductoControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(0));
         verify(service).listar("Audio");
+    }
+
+    @Test
+    void alertasStockBajo() throws Exception {
+        var alerta = new AlertaStockResponse.ProductoAlerta(3, "PRD-003", "Teclado", "Accesorios", 2, NivelAlerta.CRITICO, 8);
+        when(service.alertasStockBajo()).thenReturn(new AlertaStockResponse(10, 1, List.of(alerta)));
+
+        mvc.perform(get("/api/productos/alertas/stock-bajo"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.stockMinimo").value(10))
+                .andExpect(jsonPath("$.totalAlertas").value(1))
+                .andExpect(jsonPath("$.productos[0].nivel").value("CRITICO"))
+                .andExpect(jsonPath("$.productos[0].unidadesSugeridas").value(8));
+    }
+
+    @Test
+    void alertasStockBajoVacio() throws Exception {
+        when(service.alertasStockBajo()).thenReturn(new AlertaStockResponse(10, 0, List.of()));
+
+        mvc.perform(get("/api/productos/alertas/stock-bajo"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalAlertas").value(0))
+                .andExpect(jsonPath("$.productos.length()").value(0));
     }
 
     @Test

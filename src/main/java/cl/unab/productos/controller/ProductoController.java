@@ -1,5 +1,6 @@
 package cl.unab.productos.controller;
 
+import cl.unab.productos.dto.AlertaStockResponse;
 import cl.unab.productos.dto.ProductoRequest;
 import cl.unab.productos.dto.ProductoResponse;
 import cl.unab.productos.service.ProductoService;
@@ -36,6 +37,15 @@ public class ProductoController {
             @Parameter(description = "Filtrar por categoría", example = "Audio")
             @RequestParam(required = false) String categoria) {
         return service.listar(categoria);
+    }
+
+    @GetMapping("/alertas/stock-bajo")
+    @Operation(summary = "Alerta de stock bajo",
+            description = "Productos activos con stock menor o igual a 10, ordenados del más urgente al menos urgente. "
+                    + "Nivel: SIN_STOCK (0), CRITICO (1-5), BAJO (6-10).")
+    @ApiResponse(responseCode = "200", description = "Reporte de alertas (puede venir vacío)")
+    public AlertaStockResponse alertasStockBajo() {
+        return service.alertasStockBajo();
     }
 
     @GetMapping("/{id}")

@@ -1,5 +1,7 @@
 package cl.unab.productos.service;
 
+import cl.unab.productos.dto.AlertaStockResponse;
+import cl.unab.productos.dto.NivelAlerta;
 import cl.unab.productos.dto.ProductoRequest;
 import cl.unab.productos.dto.ProductoResponse;
 import cl.unab.productos.entity.Producto;
@@ -16,10 +18,43 @@ import java.util.List;
 @Transactional
 public class ProductoService {
 
+    /** Regla de negocio: un producto con stock menor o igual a este valor genera alerta. */
+    public static final int STOCK_MINIMO = 10;
+
+    /** Regla de negocio: con stock menor o igual a este valor la alerta es CRITICA. */
+    public static final int STOCK_CRITICO = 5;
+
     private final ProductoRepository repository;
 
     public ProductoService(ProductoRepository repository) {
         this.repository = repository;
+    }
+
+    /**
+     * Alerta de stock bajo.
+     * Reglas de negocio:
+     *  - Se alertan productos ACTIVOS con stock menor o igual a 10 (los inactivos no se reponen).
+     *  - Se ordenan del más urgente (menor stock) al menos urgente.
+     *  - Nivel: SIN_STOCK (0), CRITICO (1 a 5), BAJO (6 a 10).
+     *  - Se sugiere reponer lo necesario para llegar a 10 (con stock 10 se sugieren 0).
+     */
+    @Transactional(readOnly = true)
+    public AlertaStockResponse alertasStockBajo() {
+        List<AlertaStockResponse.ProductoAlerta> alertas = repository
+                .findByActivoTrueAndStockLessThanEqualOrderByStockAscIdAsc(STOCK_MINIMO)
+                .stream()
+                .map(p -> new AlertaStockResponse.ProductoAlerta(
+                        p.getId(), p.getCodigo(), p.getNombre(), p.getCategoria(), p.getStock(),
+                        clasificar(p.getStock()),
+                        STOCK_MINIMO - p.getStock()))
+                .toList();
+        return new AlertaStockResponse(STOCK_MINIMO, alertas.size(), alertas);
+    }
+
+    static NivelAlerta clasificar(int stock) {
+        if (stock == 0) return NivelAlerta.SIN_STOCK;
+        if (stock <= STOCK_CRITICO) return NivelAlerta.CRITICO;
+        return NivelAlerta.BAJO;
     }
 
     @Transactional(readOnly = true)
