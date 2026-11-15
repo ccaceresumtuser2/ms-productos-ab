@@ -6,6 +6,10 @@ name: CI/CD
 #                        ▼              ▼
 #               Render (dev)    Render (producción)
 #   hotfix/*   ──PR──►  main (y luego se integra en dev)
+#
+#   CI (build + tests): todas las ramas.
+#   Imagen Docker + CD: solo main y dev. feature/* y hotfix/* nunca construyen
+#   la imagen ni despliegan; su código llega a Render después del merge.
 on:
   push:
     branches: [main, dev, 'feature/**', 'hotfix/**']
@@ -73,15 +77,17 @@ jobs:
           retention-days: 7
 
   # ------------- Verifica que la imagen Docker de Render compila -------------
-  # Solo en ramas que van camino a producción (no en cada push de feature)
+  # Solo en las ramas que despliegan (main, dev) y en el PR dev -> main.
+  # feature/* y hotfix/* NO construyen la imagen (no tienen CD): ni en push ni en sus PR.
+  # Un hotfix igual pasa por este job al hacer merge a main, antes de que Render despliegue.
   docker-build:
     name: Build imagen Docker
     needs: build-test
     if: >-
-      github.ref_name == 'main' ||
-      github.ref_name == 'dev' ||
-      startsWith(github.ref_name, 'hotfix/') ||
-      (github.event_name == 'pull_request' && github.base_ref == 'main')
+      (github.event_name != 'pull_request' &&
+        (github.ref_name == 'main' || github.ref_name == 'dev')) ||
+      (github.event_name == 'pull_request' && github.base_ref == 'main' &&
+        !startsWith(github.head_ref, 'hotfix/') && !startsWith(github.head_ref, 'feature/'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -93,3 +99,4 @@ jobs:
   # cuando todos los checks de este workflow pasan en la rama del servicio:
   #   main -> ms-productos-ab      (producción)
   #   dev  -> ms-productos-ab-dev  (desarrollo)
+  # feature/* y hotfix/* no tienen servicio en Render: no se despliegan nunca.
