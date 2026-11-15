@@ -19,7 +19,7 @@ import java.util.List;
 public class ProductoService {
 
     /** Regla de negocio: un producto con stock menor a este valor genera alerta. */
-    public static final int STOCK_MINIMO = 20;
+    public static final int STOCK_MINIMO = 10;
 
     /** Regla de negocio: con stock menor o igual a este valor la alerta es CRITICA. */
     public static final int STOCK_CRITICO = 5;

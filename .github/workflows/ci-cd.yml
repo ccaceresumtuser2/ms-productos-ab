@@ -8,8 +8,12 @@ name: CI/CD
 #   hotfix/*   ──PR──►  main (y luego se integra en dev)
 #
 #   CI (build + tests): todas las ramas.
-#   Imagen Docker + CD: solo main y dev. feature/* y hotfix/* nunca construyen
-#   la imagen ni despliegan; su código llega a Render después del merge.
+#   CD:
+#     main      -> ms-productos-ab      (producción, auto-deploy de Render)
+#     dev       -> ms-productos-ab-dev  (desarrollo, auto-deploy de Render)
+#     feature/* -> ms-productos-ab-dev  (job deploy-dev, vía API de Render)
+#     hotfix/*  -> ms-productos-ab-dev  (job deploy-dev, vía API de Render)
+#   Producción solo recibe código de main.
 on:
   push:
     branches: [main, dev, 'feature/**', 'hotfix/**']
@@ -77,9 +81,9 @@ jobs:
           retention-days: 7
 
   # ------------- Verifica que la imagen Docker de Render compila -------------
-  # Solo en las ramas que despliegan (main, dev) y en el PR dev -> main.
-  # feature/* y hotfix/* NO construyen la imagen (no tienen CD): ni en push ni en sus PR.
-  # Un hotfix igual pasa por este job al hacer merge a main, antes de que Render despliegue.
+  # Solo en main, dev y en el PR dev -> main.
+  # En feature/* y hotfix/* no hace falta: Render construye la imagen al desplegar en dev,
+  # y si el build falla, dev sigue con la versión anterior.
   docker-build:
     name: Build imagen Docker
     needs: build-test
@@ -95,8 +99,47 @@ jobs:
         run: docker build -t ms-productos-ab:${{ github.sha }} .
 
   # ---------------- CD ----------------
-  # Render despliega automáticamente (render.yaml -> autoDeployTrigger: checksPass)
-  # cuando todos los checks de este workflow pasan en la rama del servicio:
-  #   main -> ms-productos-ab      (producción)
-  #   dev  -> ms-productos-ab-dev  (desarrollo)
-  # feature/* y hotfix/* no tienen servicio en Render: no se despliegan nunca.
+  # main y dev: Render despliega solo (render.yaml -> autoDeployTrigger: checksPass)
+  # cuando todos los checks de este workflow pasan en esa rama.
+  #
+  # feature/* y hotfix/*: este job despliega el commit en el ambiente DEV
+  # (ms-productos-ab-dev) usando la API de Render, solo si los tests pasaron.
+  # Se usa la API (commitId) y no el deploy hook (?ref=), porque el deploy hook
+  # con un commit específico desactiva el auto-deploy del servicio.
+  #
+  # Requiere en GitHub (Settings > Secrets and variables > Actions):
+  #   Secret   RENDER_API_KEY         -> Render > Account Settings > API Keys
+  #   Variable RENDER_DEV_SERVICE_ID  -> id del servicio dev (srv-...), está en su URL
+  #
+  # Nota: dev queda con el código de la feature/hotfix hasta el próximo push a dev,
+  # que vuelve a desplegar automáticamente la rama dev.
+  deploy-dev:
+    name: Deploy a dev (Render)
+    needs: build-test
+    if: >-
+      github.event_name == 'push' &&
+      (startsWith(github.ref_name, 'feature/') || startsWith(github.ref_name, 'hotfix/'))
+    runs-on: ubuntu-latest
+    environment:
+      name: dev
+      url: https://ms-productos-ab-dev.onrender.com/swagger-ui.html
+    concurrency:
+      group: deploy-dev          # un deploy a dev a la vez; no cancela el que está en curso
+      cancel-in-progress: false
+    steps:
+      - name: Desplegar ${{ github.ref_name }} (${{ github.sha }}) en ms-productos-ab-dev
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ vars.RENDER_DEV_SERVICE_ID }}
+        run: |
+          if [ -z "$RENDER_API_KEY" ] || [ -z "$SERVICE_ID" ]; then
+            echo "::error::Falta el secret RENDER_API_KEY o la variable RENDER_DEV_SERVICE_ID"
+            exit 1
+          fi
+          curl -fsS -X POST "https://api.render.com/v1/services/${SERVICE_ID}/deploys" \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            -H "Accept: application/json" \
+            -H "Content-Type: application/json" \
+            -d "{\"commitId\": \"${GITHUB_SHA}\"}"
+          echo
+          echo "Deploy solicitado. Sigue el progreso en el dashboard de Render (ms-productos-ab-dev > Events)."
