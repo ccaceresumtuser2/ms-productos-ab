@@ -130,15 +130,21 @@ jobs:
       - name: Desplegar ${{ github.ref_name }} (${{ github.sha }}) en ms-productos-ab-dev
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
-          SERVICE_ID: ${{ vars.RENDER_DEV_SERVICE_ID }}
+          # Se acepta como Variable (recomendado: no es un dato sensible) o como Secret
+          SERVICE_ID: ${{ vars.RENDER_DEV_SERVICE_ID || secrets.RENDER_DEV_SERVICE_ID }}
         run: |
           faltan=0
           if [ -z "$RENDER_API_KEY" ]; then
             echo "::error::Falta el SECRET RENDER_API_KEY (Settings > Secrets and variables > Actions > pestaña Secrets)"
             faltan=1
           fi
+          case "$SERVICE_ID" in
+            ""|srv-*) ;;
+            *) echo "::error::RENDER_DEV_SERVICE_ID debe ser el id del servicio (empieza con srv-), no el nombre ni la URL"
+               faltan=1 ;;
+          esac
           if [ -z "$SERVICE_ID" ]; then
-            echo "::error::Falta la VARIABLE RENDER_DEV_SERVICE_ID (Settings > Secrets and variables > Actions > pestaña Variables, no Secrets)"
+            echo "::error::Falta RENDER_DEV_SERVICE_ID (Settings > Secrets and variables > Actions, como Variable o Secret de repositorio, con el id srv-... del servicio)"
             faltan=1
           fi
           [ "$faltan" = 0 ] || exit 1
