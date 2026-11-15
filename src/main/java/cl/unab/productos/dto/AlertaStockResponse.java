@@ -6,7 +6,7 @@ import java.util.List;
 
 @Schema(description = "Reporte de productos con stock bajo")
 public record AlertaStockResponse(
-        @Schema(description = "Se alertan los productos con stock menor a este valor", example = "10")
+        @Schema(description = "Se alertan los productos con stock menor o igual a este valor", example = "10")
         int stockMinimo,
         @Schema(example = "3")
         int totalAlertas,
