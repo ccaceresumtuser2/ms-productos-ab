@@ -6,6 +6,6 @@ public enum NivelAlerta {
     SIN_STOCK,
     /** stock 1 a 5 */
     CRITICO,
-    /** stock 6 a 9 */
+    /** stock 6 a 10 */
     BAJO
 }

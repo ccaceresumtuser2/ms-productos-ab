@@ -41,8 +41,8 @@ public class ProductoController {
 
     @GetMapping("/alertas/stock-bajo")
     @Operation(summary = "Alerta de stock bajo",
-            description = "Productos activos con stock menor a 10, ordenados del más urgente al menos urgente. "
-                    + "Nivel: SIN_STOCK (0), CRITICO (1-5), BAJO (6-9).")
+            description = "Productos activos con stock menor o igual a 10, ordenados del más urgente al menos urgente. "
+                    + "Nivel: SIN_STOCK (0), CRITICO (1-5), BAJO (6-10).")
     @ApiResponse(responseCode = "200", description = "Reporte de alertas (puede venir vacío)")
     public AlertaStockResponse alertasStockBajo() {
         return service.alertasStockBajo();

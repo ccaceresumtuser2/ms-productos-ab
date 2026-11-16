@@ -18,7 +18,7 @@ import java.util.List;
 @Transactional
 public class ProductoService {
 
-    /** Regla de negocio: un producto con stock menor a este valor genera alerta. */
+    /** Regla de negocio: un producto con stock menor o igual a este valor genera alerta. */
     public static final int STOCK_MINIMO = 10;
 
     /** Regla de negocio: con stock menor o igual a este valor la alerta es CRITICA. */
@@ -33,15 +33,15 @@ public class ProductoService {
     /**
      * Alerta de stock bajo.
      * Reglas de negocio:
-     *  - Se alertan productos ACTIVOS con stock menor a 10 (los inactivos no se reponen).
+     *  - Se alertan productos ACTIVOS con stock menor o igual a 10 (los inactivos no se reponen).
      *  - Se ordenan del más urgente (menor stock) al menos urgente.
-     *  - Nivel: SIN_STOCK (0), CRITICO (1 a 5), BAJO (6 a 9).
-     *  - Se sugiere reponer lo necesario para llegar a 10.
+     *  - Nivel: SIN_STOCK (0), CRITICO (1 a 5), BAJO (6 a 10).
+     *  - Se sugiere reponer lo necesario para llegar a 10 (con stock 10 se sugieren 0).
      */
     @Transactional(readOnly = true)
     public AlertaStockResponse alertasStockBajo() {
         List<AlertaStockResponse.ProductoAlerta> alertas = repository
-                .findByActivoTrueAndStockLessThanOrderByStockAscIdAsc(STOCK_MINIMO)
+                .findByActivoTrueAndStockLessThanEqualOrderByStockAscIdAsc(STOCK_MINIMO)
                 .stream()
                 .map(p -> new AlertaStockResponse.ProductoAlerta(
                         p.getId(), p.getCodigo(), p.getNombre(), p.getCategoria(), p.getStock(),

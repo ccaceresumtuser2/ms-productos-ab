@@ -3,6 +3,8 @@ package cl.unab.productos.repository;
 import cl.unab.productos.entity.Producto;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.test.context.ActiveProfiles;
@@ -56,6 +58,28 @@ class ProductoRepositoryTest {
     void existsByCodigo() {
         assertThat(repository.existsByCodigo("C-1")).isTrue();
         assertThat(repository.existsByCodigo("NO-EXISTE")).isFalse();
+    }
+
+    /**
+     * PA-4 / BUG-01: borde de la regla "stock <= 10" probado contra la base (H2),
+     * es decir, la consulta SQL que genera Spring Data, no un mock.
+     */
+    @ParameterizedTest(name = "stock {0} -> en alerta: {1}")
+    @CsvSource({
+            "0,  true",
+            "9,  true",
+            "10, true",   // borde: stock igual al mínimo SÍ genera alerta
+            "11, false"   // justo sobre el borde: NO genera alerta
+    })
+    void alertaStockRespetaElBordeDe10(int stock, boolean enAlerta) {
+        Producto p = guardar("B-" + stock, "Borde");
+        p.setStock(stock);
+        repository.save(p);
+
+        assertThat(repository.findByActivoTrueAndStockLessThanEqualOrderByStockAscIdAsc(10))
+                .extracting(Producto::getCodigo)
+                .as("producto con stock %d", stock)
+                .matches(codigos -> codigos.contains("B-" + stock) == enAlerta);
     }
 
     @Test
