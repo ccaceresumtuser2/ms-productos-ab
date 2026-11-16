@@ -17,6 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * Test de integración: contexto Spring completo (controlador + servicio + JPA + BD H2),
  * sin mocks. Verifica que las capas funcionan juntas.
+ * autor carlos caceres ochoa
  */
 @SpringBootTest
 @AutoConfigureMockMvc
