@@ -47,20 +47,23 @@ feature/*  ──PR──►  dev  ──PR──►  main
                      ▼              ▼
             Render (dev)    Render (producción)
 
-hotfix/*   ──PR──►  main   (y luego merge de main a dev)
+bugfix/*   ──PR──►  dev    (error detectado en dev, aún no llega a producción)
+hotfix/*   ──PR──►  main   (error en producción; luego merge de main a dev)
 ```
 
-| Rama | Tests | Docker build | Deploy Render |
-|---|---|---|---|
-| `feature/*` | ✅ | — | — |
-| `dev` | ✅ | ✅ | ✅ `ms-productos-ab-dev` |
-| `hotfix/*` | ✅ | ✅ | — |
-| `main` | ✅ | ✅ | ✅ `ms-productos-ab` (producción) |
+| Rama | Nace de | PR hacia | Tests | Docker build | Deploy Render |
+|---|---|---|---|---|---|
+| `feature/*` | `dev` | `dev` | ✅ | — | ✅ `ms-productos-ab-dev` |
+| `bugfix/*` | `dev` | `dev` | ✅ | — | ✅ `ms-productos-ab-dev` |
+| `hotfix/*` | `main` | `main` | ✅ | — | ✅ `ms-productos-ab-dev` |
+| `dev` | — | `main` | ✅ | ✅ | ✅ `ms-productos-ab-dev` |
+| `main` | — | — | ✅ | ✅ | ✅ `ms-productos-ab` (producción) |
 
-Ambos deploys son automáticos y solo ocurren si todos los checks pasan.
+Todos los deploys son automáticos y solo ocurren si los tests pasan. `feature/*`, `bugfix/*` y
+`hotfix/*` se despliegan en dev con el job `deploy-dev` (API de Render); producción solo recibe `main`.
 
 En los PR, el job **Política de ramas** rechaza integraciones fuera del flujo:
-a `main` solo desde `dev` o `hotfix/*`; a `dev` solo desde `feature/*`, `hotfix/*` o `main`.
+a `main` solo desde `dev` o `hotfix/*`; a `dev` solo desde `feature/*`, `bugfix/*`, `hotfix/*` o `main`.
 
 ```
 push a main ──► GitHub Actions: build + 35 tests ──► docker build

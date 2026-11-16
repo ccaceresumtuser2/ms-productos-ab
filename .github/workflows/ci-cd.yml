@@ -5,18 +5,20 @@ name: CI/CD
 #                        │              │
 #                        ▼              ▼
 #               Render (dev)    Render (producción)
-#   hotfix/*   ──PR──►  main (y luego se integra en dev)
+#   bugfix/*   ──PR──►  dev  (error detectado en dev, aún no está en producción)
+#   hotfix/*   ──PR──►  main (error en producción; luego se integra en dev)
 #
 #   CI (build + tests): todas las ramas.
 #   CD:
 #     main      -> ms-productos-ab      (producción, auto-deploy de Render)
 #     dev       -> ms-productos-ab-dev  (desarrollo, auto-deploy de Render)
 #     feature/* -> ms-productos-ab-dev  (job deploy-dev, vía API de Render)
+#     bugfix/*  -> ms-productos-ab-dev  (job deploy-dev, vía API de Render)
 #     hotfix/*  -> ms-productos-ab-dev  (job deploy-dev, vía API de Render)
 #   Producción solo recibe código de main.
 on:
   push:
-    branches: [main, dev, 'feature/**', 'hotfix/**']
+    branches: [main, dev, 'feature/**', 'bugfix/**', 'hotfix/**']
   pull_request:
     branches: [main, dev]
   workflow_dispatch:
@@ -47,13 +49,13 @@ jobs:
               echo "::error::A main solo se integra desde 'dev' o 'hotfix/*' (recibido: '$SOURCE')"
               exit 1 ;;
             dev)
-              if [[ "$SOURCE" == feature/* || "$SOURCE" == hotfix/* || "$SOURCE" == "main" ]]; then exit 0; fi
-              echo "::error::A dev solo se integra desde 'feature/*', 'hotfix/*' o 'main' (recibido: '$SOURCE')"
+              if [[ "$SOURCE" == feature/* || "$SOURCE" == bugfix/* || "$SOURCE" == hotfix/* || "$SOURCE" == "main" ]]; then exit 0; fi
+              echo "::error::A dev solo se integra desde 'feature/*', 'bugfix/*', 'hotfix/*' o 'main' (recibido: '$SOURCE')"
               exit 1 ;;
           esac
 
   # ---------------- CI: compila y ejecuta todos los tests ----------------
-  # Corre en todas las ramas: main, dev, feature/*, hotfix/*
+  # Corre en todas las ramas: main, dev, feature/*, bugfix/*, hotfix/*
   build-test:
     name: Build y tests
     runs-on: ubuntu-24.04
@@ -82,8 +84,8 @@ jobs:
 
   # ------------- Verifica que la imagen Docker de Render compila -------------
   # Solo en main, dev y en el PR dev -> main.
-  # En feature/* y hotfix/* no hace falta: Render construye la imagen al desplegar en dev,
-  # y si el build falla, dev sigue con la versión anterior.
+  # En feature/*, bugfix/* y hotfix/* no hace falta: Render construye la imagen al desplegar
+  # en dev, y si el build falla, dev sigue con la versión anterior.
   docker-build:
     name: Build imagen Docker
     needs: build-test
@@ -91,7 +93,8 @@ jobs:
       (github.event_name != 'pull_request' &&
         (github.ref_name == 'main' || github.ref_name == 'dev')) ||
       (github.event_name == 'pull_request' && github.base_ref == 'main' &&
-        !startsWith(github.head_ref, 'hotfix/') && !startsWith(github.head_ref, 'feature/'))
+        !startsWith(github.head_ref, 'hotfix/') && !startsWith(github.head_ref, 'feature/') &&
+        !startsWith(github.head_ref, 'bugfix/'))
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -102,7 +105,7 @@ jobs:
   # main y dev: Render despliega solo (render.yaml -> autoDeployTrigger: checksPass)
   # cuando todos los checks de este workflow pasan en esa rama.
   #
-  # feature/* y hotfix/*: este job despliega el commit en el ambiente DEV
+  # feature/*, bugfix/* y hotfix/*: este job despliega el commit en el ambiente DEV
   # (ms-productos-ab-dev) usando la API de Render, solo si los tests pasaron.
   # Se usa la API (commitId) y no el deploy hook (?ref=), porque el deploy hook
   # con un commit específico desactiva el auto-deploy del servicio.
@@ -111,14 +114,15 @@ jobs:
   #   Secret   RENDER_API_KEY         -> Render > Account Settings > API Keys
   #   Variable RENDER_DEV_SERVICE_ID  -> id del servicio dev (srv-...), está en su URL
   #
-  # Nota: dev queda con el código de la feature/hotfix hasta el próximo push a dev,
+  # Nota: dev queda con el código de la feature/bugfix/hotfix hasta el próximo push a dev,
   # que vuelve a desplegar automáticamente la rama dev.
   deploy-dev:
     name: Deploy a dev (Render)
     needs: build-test
     if: >-
       github.event_name == 'push' &&
-      (startsWith(github.ref_name, 'feature/') || startsWith(github.ref_name, 'hotfix/'))
+      (startsWith(github.ref_name, 'feature/') || startsWith(github.ref_name, 'bugfix/') ||
+        startsWith(github.ref_name, 'hotfix/'))
     runs-on: ubuntu-24.04
     environment:
       name: dev
