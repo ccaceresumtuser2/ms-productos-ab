@@ -11,7 +11,7 @@ name: CI/CD
 #   CI (build + tests): todas las ramas.
 #   CD:
 #     main      -> ms-productos-ab      (producción, auto-deploy de Render)
-#     dev       -> ms-productos-ab-dev  (desarrollo, auto-deploy de Render)
+#     dev       -> ms-productos-ab-dev  (desarrollo, job deploy-dev + auto-deploy de Render)
 #     feature/* -> ms-productos-ab-dev  (job deploy-dev, vía API de Render)
 #     bugfix/*  -> ms-productos-ab-dev  (job deploy-dev, vía API de Render)
 #     hotfix/*  -> ms-productos-ab-dev  (job deploy-dev, vía API de Render)
@@ -102,11 +102,14 @@ jobs:
         run: docker build -t ms-productos-ab:${{ github.sha }} .
 
   # ---------------- CD ----------------
-  # main y dev: Render despliega solo (render.yaml -> autoDeployTrigger: checksPass)
-  # cuando todos los checks de este workflow pasan en esa rama.
+  # main: Render despliega solo (render.yaml -> autoDeployTrigger: checksPass)
+  # cuando todos los checks de este workflow pasan.
   #
-  # feature/*, bugfix/* y hotfix/*: este job despliega el commit en el ambiente DEV
+  # dev, feature/*, bugfix/* y hotfix/*: este job despliega el commit en el ambiente DEV
   # (ms-productos-ab-dev) usando la API de Render, solo si los tests pasaron.
+  # Para dev se hace también aquí (además del auto-deploy de Render) porque Render
+  # puede desactivar el auto-deploy del servicio (p. ej. tras "Deploy a specific commit"
+  # en el dashboard) y entonces los push a dev dejarían de desplegarse.
   # Se usa la API (commitId) y no el deploy hook (?ref=), porque el deploy hook
   # con un commit específico desactiva el auto-deploy del servicio.
   #
@@ -115,13 +118,14 @@ jobs:
   #   Variable RENDER_DEV_SERVICE_ID  -> id del servicio dev (srv-...), está en su URL
   #
   # Nota: dev queda con el código de la feature/bugfix/hotfix hasta el próximo push a dev,
-  # que vuelve a desplegar automáticamente la rama dev.
+  # que vuelve a desplegar la rama dev.
   deploy-dev:
     name: Deploy a dev (Render)
     needs: build-test
     if: >-
       github.event_name == 'push' &&
-      (startsWith(github.ref_name, 'feature/') || startsWith(github.ref_name, 'bugfix/') ||
+      (github.ref_name == 'dev' ||
+        startsWith(github.ref_name, 'feature/') || startsWith(github.ref_name, 'bugfix/') ||
         startsWith(github.ref_name, 'hotfix/'))
     runs-on: ubuntu-24.04
     environment:
