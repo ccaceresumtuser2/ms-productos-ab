@@ -176,25 +176,25 @@ class ProductoServiceTest {
     }
 
     @Test
-    @DisplayName("alertas consulta stock <= 10, clasifica cada producto y sugiere reposición")
+    @DisplayName("alertas consulta stock < 10, clasifica cada producto y sugiere reposición")
     void alertasStockBajo() {
-        when(repository.findByActivoTrueAndStockLessThanEqualOrderByStockAscIdAsc(10))
-                .thenReturn(List.of(conStock(1, 0), conStock(2, 4), conStock(3, 9), conStock(4, 10)));
+        when(repository.findByActivoTrueAndStockLessThanOrderByStockAscIdAsc(10))
+                .thenReturn(List.of(conStock(1, 0), conStock(2, 4), conStock(3, 9)));
 
         AlertaStockResponse res = service.alertasStockBajo();
 
         assertThat(res.stockMinimo()).isEqualTo(10);
-        assertThat(res.totalAlertas()).isEqualTo(4);
+        assertThat(res.totalAlertas()).isEqualTo(3);
         assertThat(res.productos()).extracting(AlertaStockResponse.ProductoAlerta::nivel)
-                .containsExactly(NivelAlerta.SIN_STOCK, NivelAlerta.CRITICO, NivelAlerta.BAJO, NivelAlerta.BAJO);
+                .containsExactly(NivelAlerta.SIN_STOCK, NivelAlerta.CRITICO, NivelAlerta.BAJO);
         assertThat(res.productos()).extracting(AlertaStockResponse.ProductoAlerta::unidadesSugeridas)
-                .containsExactly(10, 6, 1, 0);
-        verify(repository).findByActivoTrueAndStockLessThanEqualOrderByStockAscIdAsc(10);
+                .containsExactly(10, 6, 1);
+        verify(repository).findByActivoTrueAndStockLessThanOrderByStockAscIdAsc(10);
     }
 
     @Test
     void alertasSinResultadosDevuelveListaVacia() {
-        when(repository.findByActivoTrueAndStockLessThanEqualOrderByStockAscIdAsc(10)).thenReturn(List.of());
+        when(repository.findByActivoTrueAndStockLessThanOrderByStockAscIdAsc(10)).thenReturn(List.of());
 
         AlertaStockResponse res = service.alertasStockBajo();
 
@@ -208,8 +208,7 @@ class ProductoServiceTest {
             "1, CRITICO",
             "5, CRITICO",
             "6, BAJO",
-            "9, BAJO",
-            "10, BAJO"
+            "9, BAJO"
     })
     void clasificacionDelNivel(int stock, NivelAlerta esperado) {
         assertThat(ProductoService.clasificar(stock)).isEqualTo(esperado);

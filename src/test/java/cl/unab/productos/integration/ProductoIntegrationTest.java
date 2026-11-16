@@ -94,8 +94,8 @@ class ProductoIntegrationTest {
 
     @Test
     void alertasStockBajoConDatosReales() throws Exception {
-        // stock: 0 (sin stock), 3 (crítico), 8 (bajo), 10 (bajo, borde del BUG-01),
-        // 11 (ok, justo sobre el borde), 50 (ok) y uno inactivo con stock 1
+        // stock: 0 (sin stock), 3 (crítico), 8 (bajo), 10 (ok: la regla es stock < 10),
+        // 11 (ok), 50 (ok) y uno inactivo con stock 1
         for (String[] p : new String[][]{{"S-0", "0", "true"}, {"S-3", "3", "true"}, {"S-8", "8", "true"},
                 {"S-10", "10", "true"}, {"S-11", "11", "true"},
                 {"S-50", "50", "true"}, {"S-INACTIVO", "1", "false"}}) {
@@ -108,15 +108,13 @@ class ProductoIntegrationTest {
         mvc.perform(get("/api/productos/alertas/stock-bajo"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.stockMinimo").value(10))
-                .andExpect(jsonPath("$.totalAlertas").value(4))       // 11, 50 y el inactivo no aparecen
+                .andExpect(jsonPath("$.totalAlertas").value(3))       // 10, 11, 50 y el inactivo no aparecen
                 .andExpect(jsonPath("$.productos[0].codigo").value("S-0"))
                 .andExpect(jsonPath("$.productos[0].nivel").value("SIN_STOCK"))
                 .andExpect(jsonPath("$.productos[1].nivel").value("CRITICO"))
+                .andExpect(jsonPath("$.productos[2].codigo").value("S-8"))
                 .andExpect(jsonPath("$.productos[2].nivel").value("BAJO"))
-                .andExpect(jsonPath("$.productos[2].unidadesSugeridas").value(2))
-                .andExpect(jsonPath("$.productos[3].codigo").value("S-10"))  // BUG-01: stock 10 sí aparece
-                .andExpect(jsonPath("$.productos[3].nivel").value("BAJO"))
-                .andExpect(jsonPath("$.productos[3].unidadesSugeridas").value(0));
+                .andExpect(jsonPath("$.productos[2].unidadesSugeridas").value(2));
     }
 
     @Test
